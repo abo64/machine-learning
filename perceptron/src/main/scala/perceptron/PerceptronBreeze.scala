@@ -4,6 +4,7 @@ import scala.annotation.tailrec
 import breeze.linalg._
 import breeze.plot._
 import PerceptronBreeze._
+import scala.util.Random
 
 class PerceptronBreeze(d: Dimension, f: TargetFunction, dataSetSize: DataSetSize)
 {
@@ -27,7 +28,9 @@ class PerceptronBreeze(d: Dimension, f: TargetFunction, dataSetSize: DataSetSize
     loop(Set())
   }
 
-  val StartWeight: Weight = //Vector.rand(d + 1)
+  val StartWeight: Weight =
+//    Vector.rand(d + 1)
+//    Vector.fill(d + 1)(1d)
     Vector.zeros(d + 1)
 
   // PLA
@@ -44,16 +47,17 @@ class PerceptronBreeze(d: Dimension, f: TargetFunction, dataSetSize: DataSetSize
     def pickMisclassified(w: Weight): Option[Example] =
       dataSet find { case (x, y) => h(w, x) != y }
 
-    def showStatus(w: Weight, iterations: Iterations) = {
+    def showStatus(w: Weight, iterations: Iterations, howManyData: Int = 20) = {
       println(s"$iterations iterations: $w")
-      new BreezeViz(dataSet, w, iterations).save
+      val dataToShow = Random.shuffle(dataSet) take howManyData
+      new BreezeViz(dataToShow, w, iterations).save
     }
 
     @tailrec
     def loop(w: Weight, misclassified: Option[Example], iterations: Iterations): (Weight, Iterations) =
       misclassified match {
         case None =>
-          showStatus(w, iterations)
+          showStatus(w, iterations, min(dataSet.size, 100))
           (w, iterations)
         case Some(example) =>
           val newW = update(w, example)
@@ -85,7 +89,7 @@ object PerceptronBreeze {
       if (v(1) <= v(2)/2) 1 else -1
     }
 
-    val perceptron = new PerceptronBreeze(2, g, 20)
+    val perceptron = new PerceptronBreeze(2, f, 20)
     val dataSet = perceptron.genDataSet
     println(dataSet count {case (_,b) => b > 0})
     val (w,i) = perceptron.learn(dataSet)
