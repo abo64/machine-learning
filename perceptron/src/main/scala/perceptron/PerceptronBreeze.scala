@@ -6,35 +6,22 @@ import breeze.plot._
 import PerceptronBreeze._
 import scala.util.Random
 
-class PerceptronBreeze(d: Dimension, f: TargetFunction, dataSetSize: DataSetSize)
-{
-  def genDataSet: DataSet = {
-    def genInput: Input = {
-      val v = DenseVector.rand[Double](d + 1)
-      v(0) = 1d
-      v
-    }
+object PerceptronBreeze {
 
-    def genExample: Example = {
-      val input = genInput
-      (input, f(input))
-    }
-
-    @tailrec
-    def loop(result: DataSet): DataSet =
-      if (result.size == dataSetSize) result
-      else loop(result + genExample)
-
-    loop(Set())
-  }
-
-  val StartWeight: Weight =
-//    Vector.rand(d + 1)
-//    Vector.fill(d + 1)(1d)
-    Vector.zeros(d + 1)
+  type Dimension = Int
+  type Input = Vector[Double]
+  type Output = Int // +1 or -1
+  type Classifier = Input => Output
+  type TargetFunction = Classifier
+  type Example = (Input, Output)
+  type DataSet = Set[Example]
+  type DataSetSize = Int
+  type Weight = Vector[Double]
+  type Hypothesis = (Weight, Input) => Output
+  type Iterations = Int
 
   // PLA
-  def learn(dataSet: DataSet): (Weight, Iterations) = {
+  def learn(dataSet: DataSet, startWeight: Weight): (Weight, Iterations, Classifier) = {
     val h: Hypothesis = (w, x) =>
       math.signum(w.t * x) toInt
 
@@ -54,32 +41,27 @@ class PerceptronBreeze(d: Dimension, f: TargetFunction, dataSetSize: DataSetSize
     }
 
     @tailrec
-    def loop(w: Weight, misclassified: Option[Example], iterations: Iterations): (Weight, Iterations) =
+    def loop(w: Weight, misclassified: Option[Example],
+        iterations: Iterations): (Weight, Iterations, Classifier) =
       misclassified match {
         case None =>
           showStatus(w, iterations, min(dataSet.size, 100))
-          (w, iterations)
+          (w, iterations, h(w, _))
         case Some(example) =>
           val newW = update(w, example)
           if (iterations % 10 == 0 && iterations <= 100) showStatus(w, iterations)
           loop(newW, pickMisclassified(newW), iterations + 1)
     }
 
-    loop(StartWeight, pickMisclassified(StartWeight), 0)
+    loop(startWeight, pickMisclassified(startWeight), 0)
   }
-}
 
-object PerceptronBreeze {
-  type Dimension = Int
-  type Input = Vector[Double]
-  type Output = Int // +1 or -1
-  type TargetFunction = Input => Output
-  type Example = (Input, Output)
-  type DataSet = Set[Example]
-  type DataSetSize = Int
-  type Weight = Vector[Double]
-  type Hypothesis = (Weight, Input) => Output
-  type Iterations = Int
+  def predict(dataSet: DataSet, classifier: Classifier): (Int, Int) = {
+    val misclassified = dataSet count { case (in, expectedOut) =>
+      classifier(in) != expectedOut
+    }
+    (misclassified, dataSet.size)
+  }
 
   def main(args: Array[String]): Unit = {
     val f: TargetFunction = { v =>
@@ -89,11 +71,32 @@ object PerceptronBreeze {
       if (v(1) <= v(2)/2) 1 else -1
     }
 
-    val perceptron = new PerceptronBreeze(2, f, 20)
-    val dataSet = perceptron.genDataSet
-    println(dataSet count {case (_,b) => b > 0})
-    val (w,i) = perceptron.learn(dataSet)
+    val d: Dimension = 2
+
+    val startWeight: Weight =
+//      Vector.rand(d + 1)
+//      Vector.fill(d + 1)(1d)
+      Vector.zeros(d + 1)
+
+    def genInput: Input = {
+      val v = DenseVector.rand[Double](d + 1)
+      v(0) = 1d
+      v
+    }
+
+    val dataSetGen = new DataSetGen(genInput, f)
+    val perceptron = PerceptronBreeze
+    val trainingSet = dataSetGen.genDataSet(20)
+    val ones = trainingSet count {case (_,b) => b > 0}
+    println(s"$ones/${trainingSet.size}")
+    val (w,i, classifier) = perceptron.learn(trainingSet, startWeight)
     println(w)
     println(s"$i iterations")
+
+    val testSet = dataSetGen.genDataSet(100)
+    val (misclassified, total) = perceptron.predict(testSet, classifier)
+    val hits = total - misclassified
+    val successRate = math.round(hits * 10000d / total) / 100d
+    println(s"prediction result: $successRate% ($hits/$total)")
   }
 }
